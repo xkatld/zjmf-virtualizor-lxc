@@ -76,7 +76,13 @@ if [[ -d "$DIR" ]] && [[ -f "$DIR/version" ]]; then
   fi
 fi
 
-dnf install -y curl wget openssl systemd unzip || err "依赖安装失败"
+if command -v dnf &> /dev/null; then
+  dnf install -y curl wget openssl systemd unzip
+elif command -v yum &> /dev/null; then
+  yum install -y curl wget openssl systemd unzip
+else
+  err "不支持的系统，Virtualizor 仅支持 RHEL/CentOS/Fedora"
+fi
 
 systemctl stop $NAME 2>/dev/null || true
 
@@ -156,10 +162,10 @@ while [[ -z "$VZ_API_PASSWORD" ]]; do
   [[ -z "$VZ_API_PASSWORD" ]] && warn "不能为空"
 done
 
-sed -i "s/port: 8443/port: $SERVER_PORT/" "$CFG"
-sed -i "s/api_key: \"\"/api_key: \"$API_KEY\"/" "$CFG"
-sed -i "0,/api_key: \"\"/s//api_key: \"$VZ_API_KEY\"/" "$CFG"
-sed -i "s/api_password: \"\"/api_password: \"$VZ_API_PASSWORD\"/" "$CFG"
+sed -i "s/SERVER_PORT/$SERVER_PORT/" "$CFG"
+sed -i "s/API_KEY/$API_KEY/" "$CFG"
+sed -i "s/VZ_API_KEY/$VZ_API_KEY/" "$CFG"
+sed -i "s/VZ_API_PASSWORD/$VZ_API_PASSWORD/" "$CFG"
 
 ok "配置文件已生成"
 
