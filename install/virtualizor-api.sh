@@ -137,12 +137,9 @@ EOF
   fi
 fi
 
-SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
-TEMPLATE="$SCRIPT_DIR/config.yaml"
-
-[[ ! -f "$TEMPLATE" ]] && err "配置模板不存在: $TEMPLATE"
-
-cp "$TEMPLATE" "$CFG"
+CONFIG_URL="$REPO/raw/main/install/config.yaml"
+info "下载配置模板..."
+wget -qO "$CFG" "$CONFIG_URL" || err "配置模板下载失败"
 
 read -p "API 服务端口 [8443]: " SERVER_PORT
 SERVER_PORT=${SERVER_PORT:-8443}
