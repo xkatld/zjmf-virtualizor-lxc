@@ -76,16 +76,7 @@ if [[ -d "$DIR" ]] && [[ -f "$DIR/version" ]]; then
   fi
 fi
 
-if command -v apt &> /dev/null; then
-  apt update -y
-  apt install -y curl wget openssl systemd unzip || err "依赖安装失败"
-elif command -v dnf &> /dev/null; then
-  dnf install -y curl wget openssl systemd unzip || err "依赖安装失败"
-elif command -v yum &> /dev/null; then
-  yum install -y curl wget openssl systemd unzip || err "依赖安装失败"
-else
-  err "不支持的包管理器"
-fi
+dnf install -y curl wget openssl systemd unzip || err "依赖安装失败"
 
 systemctl stop $NAME 2>/dev/null || true
 
