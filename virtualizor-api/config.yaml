@@ -1,5 +1,5 @@
 server:
-  port: 8443
+  port: SERVER_PORT
   mode: release
   
   tls:
@@ -9,13 +9,13 @@ server:
     auto_gen: true
 
 security:
-  api_key: ""
+  api_key: "API_KEY"
 
 virtualizor:
   host: "127.0.0.1"
   port: 4085
-  api_key: ""
-  api_password: ""
+  api_key: "VZ_API_KEY"
+  api_password: "VZ_API_PASSWORD"
   timeout: 30
   skip_verify: true
 
@@ -26,4 +26,3 @@ logging:
   max_backups: 10
   max_age: 30
   compress: true
-
