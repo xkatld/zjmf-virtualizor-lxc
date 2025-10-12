@@ -1,5 +1,5 @@
 server:
-  port: 8080
+  port: 8443
   mode: release
   
   tls:
@@ -9,13 +9,13 @@ server:
     auto_gen: true
 
 security:
-  api_key: "xxxxxx"
+  api_key: ""
 
 virtualizor:
   host: "127.0.0.1"
   port: 4085
-  api_key: "xxxxxxx"
-  api_password: "xxxxxxxx"
+  api_key: ""
+  api_password: ""
   timeout: 30
   skip_verify: true
 
