@@ -141,8 +141,8 @@ CONFIG_URL="$REPO/raw/main/install/config.yaml"
 info "下载配置模板..."
 wget -qO "$CFG" "$CONFIG_URL" || err "配置模板下载失败"
 
-read -p "API 服务端口 [8443]: " SERVER_PORT
-SERVER_PORT=${SERVER_PORT:-8443}
+read -p "API 服务端口 [8080]: " SERVER_PORT
+SERVER_PORT=${SERVER_PORT:-8080}
 
 while [[ -z "$API_KEY" ]]; do
   read -p "API 访问密钥: " API_KEY
