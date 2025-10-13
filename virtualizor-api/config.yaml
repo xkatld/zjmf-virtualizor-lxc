@@ -22,7 +22,11 @@ virtualizor:
 logging:
   level: "info"
   file: "logs/app.log"
-  max_size: 100
-  max_backups: 10
+  max_size: 10
+  max_backups: 5
   max_age: 30
   compress: true
+
+nat:
+  public_ip: "NAT_PUBLIC_IP"
+  interface: "NAT_INTERFACE"
