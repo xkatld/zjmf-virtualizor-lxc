@@ -18,6 +18,7 @@ ok() { log "${GREEN}[OK]${NC} $1"; }
 info() { log "${BLUE}[INFO]${NC} $1"; }
 warn() { log "${YELLOW}[WARN]${NC} $1"; }
 err() { log "${RED}[ERR]${NC} $1"; exit 1; }
+escape_sed() { printf '%s' "$1" | sed -e 's/[\\/&]/\\&/g'; }
 
 [[ $EUID -ne 0 ]] && err "请使用 root 运行"
 
@@ -103,8 +104,10 @@ mkdir -p "$DIR/configs"
 TMP=$(mktemp -d)
 wget -qO "$TMP/$NAME.zip" "$DOWNLOAD_URL" || err "下载失败"
 unzip -q "$TMP/$NAME.zip" -d "$TMP" || err "解压失败"
+rm -f "$TMP/$NAME.zip"
 chmod +x "$TMP/$BIN"
-mv "$TMP/$BIN" "$DIR/"
+cp -a "$TMP"/. "$DIR/"
+chmod +x "$DIR/$BIN"
 echo "$VERSION" > "$DIR/version"
 
 if [[ -f "$CFG.bak" ]]; then
@@ -137,8 +140,7 @@ EOF
   fi
 fi
 
-if [[ -f "$TMP/config.yaml" ]]; then
-  cp "$TMP/config.yaml" "$CFG"
+if [[ -f "$DIR/config.yaml" ]]; then
   rm -rf "$TMP"
 else
   rm -rf "$TMP"
@@ -173,12 +175,12 @@ while [[ -z "$NAT_INTERFACE" ]]; do
   [[ -z "$NAT_INTERFACE" ]] && warn "不能为空"
 done
 
-sed -i "s/SERVER_PORT/$SERVER_PORT/" "$CFG"
-sed -i "s/API_KEY/$API_KEY/" "$CFG"
-sed -i "s/VZ_API_KEY/$VZ_API_KEY/" "$CFG"
-sed -i "s/VZ_API_PASSWORD/$VZ_API_PASSWORD/" "$CFG"
-sed -i "s/NAT_PUBLIC_IP/$NAT_PUBLIC_IP/" "$CFG"
-sed -i "s/NAT_INTERFACE/$NAT_INTERFACE/" "$CFG"
+sed -i "s|SERVER_PORT|$SERVER_PORT|" "$CFG"
+sed -i "s|\"API_KEY\"|\"$(escape_sed "$API_KEY")\"|" "$CFG"
+sed -i "s|\"VZ_API_KEY\"|\"$(escape_sed "$VZ_API_KEY")\"|" "$CFG"
+sed -i "s|\"VZ_API_PASSWORD\"|\"$(escape_sed "$VZ_API_PASSWORD")\"|" "$CFG"
+sed -i "s|\"NAT_PUBLIC_IP\"|\"$(escape_sed "$NAT_PUBLIC_IP")\"|" "$CFG"
+sed -i "s|\"NAT_INTERFACE\"|\"$(escape_sed "$NAT_INTERFACE")\"|" "$CFG"
 
 ok "配置文件已生成"
 
