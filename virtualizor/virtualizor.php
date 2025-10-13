@@ -18,7 +18,7 @@ function virtualizor_debug($message, $data = null) {
 function virtualizor_MetaData()
 {
     return [
-        'DisplayName' => 'Virtualizor LXC',
+        'DisplayName' => '魔方财务-Virtualizor-Lxc对接插件 by xkatld',
         'APIVersion'  => '1.0.0',
         'HelpDoc'     => 'https://github.com/your-repo/virtualizor-api',
     ];
@@ -117,6 +117,29 @@ function virtualizor_ConfigOptions()
             'description' => '每月重装系统次数限制，0表示不限制',
             'default'     => '0',
             'key'         => 'osreinstall_limit',
+        ],
+        'nat_enabled' => [
+            'type'        => 'dropdown',
+            'name'        => 'NAT端口转发功能',
+            'description' => '是否启用NAT端口转发功能',
+            'default'     => 'false',
+            'key'         => 'nat_enabled',
+            'options'     => ['false' => '禁用', 'true' => '启用'],
+        ],
+        'nat_limit' => [
+            'type'        => 'text',
+            'name'        => 'NAT规则数量',
+            'description' => 'NAT端口转发规则的数量限制',
+            'default'     => '5',
+            'key'         => 'nat_limit',
+        ],
+        'udp_enabled' => [
+            'type'        => 'dropdown',
+            'name'        => 'UDP协议支持',
+            'description' => '是否允许创建UDP端口转发规则',
+            'default'     => 'false',
+            'key'         => 'udp_enabled',
+            'options'     => ['false' => '禁用', 'true' => '启用'],
         ],
     ];
 }
@@ -446,11 +469,11 @@ function virtualizor_CrackPassword($params, $new_pass)
         try {
             Db::name('host')->where('id', $params['hostid'])->update(['password' => $new_pass]);
         } catch (\Exception $e) {
-            return ['status' => 'error', 'msg' => ($res['msg'] ?? $res['message'] ?? 'Virtualizor容器密码重置成功，但同步新密码到面板数据库失败: ' . $e->getMessage())];
+            return ['status' => 'error', 'msg' => 'Virtualizor容器密码重置成功，但同步新密码到面板数据库失败: ' . $e->getMessage()];
         }
-        return ['status' => 'success', 'msg' => $res['msg'] ?? $res['message'] ?? '密码重置成功'];
+        return ['status' => 'success', 'msg' => $res['msg'] ?? '密码重置成功'];
     } else {
-        return ['status' => 'error', 'msg' => $res['msg'] ?? $res['message'] ?? '密码重置失败'];
+        return ['status' => 'error', 'msg' => $res['msg'] ?? '密码重置失败'];
     }
 }
 
@@ -468,25 +491,32 @@ function virtualizor_Reinstall($params)
         'type' => 'application/json',
         'data' => [
             'hostname' => $params['domain'],
-            'system'   => $params['reinstall_os'],
+            'osid'     => $params['reinstall_os'],
             'password' => $reinstall_pass,
         ],
     ];
     $res = virtualizor_JSONCurl($params, $data, 'POST');
 
     if (isset($res['code']) && $res['code'] == 200) {
-        return ['status' => 'success', 'msg' => $res['msg'] ?? $res['message'] ?? '重装成功'];
+        return ['status' => 'success', 'msg' => $res['msg'] ?? '重装成功'];
     } else {
-        return ['status' => 'error', 'msg' => $res['msg'] ?? $res['message'] ?? '重装失败'];
+        return ['status' => 'error', 'msg' => $res['msg'] ?? '重装失败'];
     }
 }
 
 // 客户区页面定义
 function virtualizor_ClientArea($params)
 {
-    return [
+    $pages = [
         'info' => ['name' => '产品信息'],
     ];
+    
+    $nat_enabled = ($params['configoptions']['nat_enabled'] ?? 'false') === 'true';
+    if ($nat_enabled) {
+        $pages['nat_acl'] = ['name' => 'NAT转发'];
+    }
+    
+    return $pages;
 }
 
 // 客户区页面输出
@@ -504,10 +534,17 @@ function virtualizor_ClientAreaOutput($params, $key)
             exit;
         }
 
+        if ($action === 'natcheck') {
+            header('Content-Type: application/json');
+            echo json_encode(virtualizor_natcheck($params));
+            exit;
+        }
+
         $apiEndpoints = [
             'getinfo'    => '/api/status',
             'getstats'   => '/api/info',
             'getinfoall' => '/api/info',
+            'natlist'    => '/api/natlist',
         ];
 
         $apiEndpoint = $apiEndpoints[$action] ?? '';
@@ -531,9 +568,10 @@ function virtualizor_ClientAreaOutput($params, $key)
         } elseif (!is_array($res)) {
             $res = ['code' => 500, 'msg' => '服务器返回了无效的响应格式'];
         } else {
-            $res = virtualizor_TransformAPIResponse($action, $res);
+            $res = virtualizor_TransformAPIResponse($action, $res, $params);
             
-            if (isset($res['data']) && !isset($res['data']['cpu_cores'])) {
+            // 只为容器信息类请求添加 cpu_cores
+            if (in_array($action, ['getinfo', 'getstats', 'getinfoall']) && isset($res['data']) && !isset($res['data']['cpu_cores'])) {
                 $res['data']['cpu_cores'] = intval($params['configoptions']['cores'] ?? 1);
             }
         }
@@ -552,13 +590,41 @@ function virtualizor_ClientAreaOutput($params, $key)
             'vars'     => [],
         ];
     }
+
+    if ($key == 'nat_acl') {
+        $nat_enabled = ($params['configoptions']['nat_enabled'] ?? 'false') === 'true';
+        
+        $requestData = [
+            'url'  => '/api/natlist?hostname=' . $params['domain'] . '&_t=' . time(),
+            'type' => 'application/x-www-form-urlencoded',
+            'data' => [],
+        ];
+        $res = virtualizor_Curl($params, $requestData, 'GET');
+
+        $nat_limit = intval($params['configoptions']['nat_limit'] ?? 5);
+        $current_count = virtualizor_getNATRuleCount($params);
+        $udp_enabled = ($params['configoptions']['udp_enabled'] ?? 'false') === 'true';
+
+        return [
+            'template' => 'templates/nat.html',
+            'vars'     => [
+                'list' => $res['data'] ?? [],
+                'msg'  => $res['msg'] ?? '',
+                'nat_limit' => $nat_limit,
+                'current_count' => $current_count,
+                'remaining_count' => max(0, $nat_limit - $current_count),
+                'udp_enabled' => $udp_enabled,
+                'nat_enabled' => $nat_enabled,
+            ],
+        ];
+    }
 }
 
 // 允许客户端调用的函数列表
 function virtualizor_AllowFunction()
 {
     return [
-        'client' => ['vnc'],
+        'client' => ['vnc', 'natadd', 'natdel', 'natlist', 'natcheck'],
     ];
 }
 
@@ -702,7 +768,7 @@ function virtualizor_Curl($params, $data = [], $request = 'POST')
 }
 
 // 转换API响应以适配前端
-function virtualizor_TransformAPIResponse($action, $response)
+function virtualizor_TransformAPIResponse($action, $response, $params = [])
 {
     if (isset($response['error'])) {
         return [
@@ -740,6 +806,7 @@ function virtualizor_TransformAPIResponse($action, $response)
                     'msg' => '获取容器信息成功',
                     'data' => [
                         'vpsid' => $data['vpsid'] ?? '',
+                        'hostname' => $params['domain'] ?? ($data['hostname'] ?? ''),
                         'status' => $data['status'] ?? 0,
                         'virt' => $data['virt'] ?? 'lxc',
 
@@ -787,5 +854,241 @@ function virtualizor_TransformAPIResponse($action, $response)
     }
 
     return $response;
+}
+
+// ============ NAT端口转发功能 ============
+
+// 获取容器NAT规则数量
+function virtualizor_getNATRuleCount($params)
+{
+    $data = [
+        'url'  => '/api/natlist?hostname=' . urlencode($params['domain']),
+        'type' => 'application/x-www-form-urlencoded',
+        'data' => [],
+    ];
+
+    $res = virtualizor_Curl($params, $data, 'GET');
+
+    if (isset($res['code']) && $res['code'] == 200 && isset($res['data']) && is_array($res['data'])) {
+        return count($res['data']);
+    }
+
+    return 0;
+}
+
+// 添加NAT端口转发
+function virtualizor_natadd($params)
+{
+    $nat_enabled = ($params['configoptions']['nat_enabled'] ?? 'false') === 'true';
+    if (!$nat_enabled) {
+        return ['status' => 'error', 'msg' => 'NAT端口转发功能已禁用，请联系管理员启用此功能。'];
+    }
+    
+    parse_str(file_get_contents("php://input"), $post);
+
+    $dport = intval($post['dport'] ?? 0);
+    $sport = intval($post['sport'] ?? 0);
+    $dtype = strtolower(trim($post['dtype'] ?? ''));
+    $description = trim($post['description'] ?? '');
+    $udp_enabled = ($params['configoptions']['udp_enabled'] ?? 'false') === 'true';
+
+    if (!in_array($dtype, ['tcp', 'udp'])) {
+        return ['status' => 'error', 'msg' => '不支持的协议类型，仅支持TCP和UDP'];
+    }
+    
+    if ($dtype === 'udp' && !$udp_enabled) {
+        return ['status' => 'error', 'msg' => 'UDP协议未启用，请联系管理员开启UDP支持'];
+    }
+    if ($sport <= 0 || $sport > 65535) {
+        return ['status' => 'error', 'msg' => '容器内部端口超过范围'];
+    }
+
+    $nat_limit = intval($params['configoptions']['nat_limit'] ?? 5);
+
+    $current_count = virtualizor_getNATRuleCount($params);
+    if ($current_count >= $nat_limit) {
+        return ['status' => 'error', 'msg' => "NAT规则数量已达到限制（{$nat_limit}条），无法添加更多规则"];
+    }
+
+    $requestData = 'hostname=' . urlencode($params['domain']) . '&dtype=' . urlencode($dtype) . '&sport=' . $sport;
+
+    if ($dport > 0) {
+        if ($dport < 10000 || $dport > 65535) {
+            return ['status' => 'error', 'msg' => '外网端口范围为10000-65535'];
+        }
+        $checkData = [
+            'url'  => '/api/nat/check?hostname=' . urlencode($params['domain']) . '&protocol=' . urlencode($dtype) . '&port=' . $dport,
+            'type' => 'application/x-www-form-urlencoded',
+            'data' => [],
+        ];
+        $checkRes = virtualizor_Curl($params, $checkData, 'GET');
+        if (!isset($checkRes['code']) || $checkRes['code'] != 200 || empty($checkRes['data']['available'])) {
+            $reason = $checkRes['data']['reason'] ?? $checkRes['msg'] ?? '端口不可用';
+            return ['status' => 'error', 'msg' => $reason];
+        }
+        $requestData .= '&dport=' . $dport;
+    }
+    
+    if (!empty($description)) {
+        $requestData .= '&description=' . urlencode($description);
+    }
+
+    $data = [
+        'url'  => '/api/addport',
+        'type' => 'application/x-www-form-urlencoded',
+        'data' => $requestData,
+    ];
+
+    $res = virtualizor_Curl($params, $data, 'POST');
+
+    if (isset($res['code']) && $res['code'] == 200) {
+        return ['status' => 'success', 'msg' => $res['msg'] ?? 'NAT转发添加成功'];
+    } else {
+        return ['status' => 'error', 'msg' => $res['msg'] ?? 'NAT转发添加失败'];
+    }
+}
+
+// 删除NAT端口转发
+function virtualizor_natdel($params)
+{
+    parse_str(file_get_contents("php://input"), $post);
+
+    $dport = intval($post['dport'] ?? 0);
+    $sport = intval($post['sport'] ?? 0);
+    $dtype = strtolower(trim($post['dtype'] ?? ''));
+    $udp_enabled = ($params['configoptions']['udp_enabled'] ?? 'false') === 'true';
+
+    if (!in_array($dtype, ['tcp', 'udp'])) {
+        return ['status' => 'error', 'msg' => '不支持的协议类型，仅支持TCP和UDP'];
+    }
+    
+    if ($dtype === 'udp' && !$udp_enabled) {
+        // UDP已禁用但允许删除已存在的UDP规则
+    }
+    if ($sport <= 0 || $sport > 65535) {
+        return ['status' => 'error', 'msg' => '容器内部端口超过范围'];
+    }
+    if ($dport < 10000 || $dport > 65535) {
+        return ['status' => 'error', 'msg' => '外网端口映射范围为10000-65535'];
+    }
+
+    $data = [
+        'url'  => '/api/delport',
+        'type' => 'application/x-www-form-urlencoded',
+        'data' => 'hostname=' . urlencode($params['domain']) . '&dtype=' . urlencode($dtype) . '&dport=' . $dport . '&sport=' . $sport,
+    ];
+
+    $res = virtualizor_Curl($params, $data, 'POST');
+
+    if (isset($res['code']) && $res['code'] == 200) {
+        return ['status' => 'success', 'msg' => $res['msg'] ?? 'NAT转发删除成功'];
+    } else {
+        return ['status' => 'error', 'msg' => $res['msg'] ?? 'NAT转发删除失败'];
+    }
+}
+
+// 获取NAT规则列表
+function virtualizor_natlist($params)
+{
+    $requestData = [
+        'url'  => '/api/natlist?hostname=' . $params['domain'] . '&_t=' . time(),
+        'type' => 'application/x-www-form-urlencoded',
+        'data' => [],
+    ];
+    $res = virtualizor_Curl($params, $requestData, 'GET');
+    if ($res === null) {
+        return ['code' => 500, 'msg' => '连接API服务器失败', 'data' => []];
+    }
+    return $res;
+}
+
+// 检查NAT端口是否可用
+function virtualizor_natcheck($params)
+{
+    // 先尝试从URL查询参数获取
+    $dport = intval($_GET['dport'] ?? 0);
+    $dtype = strtolower(trim($_GET['dtype'] ?? ''));
+    $hostname = trim($_GET['hostname'] ?? '');
+
+    // 如果GET参数为空，尝试从POST获取
+    if ($dport <= 0) {
+        $dport = intval($_POST['dport'] ?? 0);
+    }
+    if (empty($dtype)) {
+        $dtype = strtolower(trim($_POST['dtype'] ?? 'tcp'));
+    }
+    if (empty($hostname)) {
+        $hostname = trim($_POST['hostname'] ?? '');
+    }
+
+    // 如果还是为空，尝试从原始POST数据解析
+    if ($dport <= 0 || empty($hostname)) {
+        $postRaw = file_get_contents("php://input");
+        if (!empty($postRaw)) {
+            parse_str($postRaw, $input);
+            if ($dport <= 0) {
+                $dport = intval($input['dport'] ?? 0);
+            }
+            if (empty($dtype)) {
+                $dtype = strtolower(trim($input['dtype'] ?? 'tcp'));
+            }
+            if (empty($hostname)) {
+                $hostname = trim($input['hostname'] ?? '');
+            }
+        }
+    }
+
+    // 如果hostname还是空，使用params中的domain
+    if (empty($hostname)) {
+        $hostname = trim($params['domain'] ?? '');
+    }
+
+    virtualizor_debug('natcheck参数解析', [
+        'dport' => $dport, 
+        'dtype' => $dtype, 
+        'hostname' => $hostname,
+        'GET' => $_GET,
+        'POST' => $_POST,
+        'params_domain' => $params['domain'] ?? 'null'
+    ]);
+
+    // 参数验证
+    if ($dport <= 0) {
+        return ['code' => 400, 'msg' => '缺少端口参数', 'data' => ['available' => false, 'reason' => '缺少端口参数']];
+    }
+    if (!in_array($dtype, ['tcp', 'udp'])) {
+        return ['code' => 400, 'msg' => '协议类型错误', 'data' => ['available' => false, 'reason' => '协议类型错误']];
+    }
+    if ($dport < 10000 || $dport > 65535) {
+        return ['code' => 400, 'msg' => '端口范围为10000-65535', 'data' => ['available' => false, 'reason' => '端口范围为10000-65535']];
+    }
+    if (empty($hostname)) {
+        return ['code' => 400, 'msg' => '容器标识缺失', 'data' => ['available' => false, 'reason' => '容器标识缺失']];
+    }
+
+    // 使用GET请求调用后端API
+    $queryParams = http_build_query([
+        'hostname' => $hostname,
+        'protocol' => $dtype,
+        'port'     => $dport,
+    ]);
+
+    $requestData = [
+        'url'  => '/api/nat/check?' . $queryParams,
+        'type' => 'application/x-www-form-urlencoded',
+        'data' => '',
+    ];
+
+    $res = virtualizor_Curl($params, $requestData, 'GET');
+
+    if ($res === null) {
+        return ['code' => 500, 'msg' => '连接服务器失败', 'data' => ['available' => false, 'reason' => '连接服务器失败']];
+    }
+
+    if (!isset($res['code'])) {
+        return ['code' => 500, 'msg' => '服务器返回无效数据', 'data' => ['available' => false, 'reason' => '服务器返回无效数据']];
+    }
+
+    return $res;
 }
 

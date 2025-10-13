@@ -258,11 +258,17 @@ if (typeof Chart !== 'undefined') {
 </div>
 
 <script>
-var currentInfoContainerId = '';
-var cpuChart, memoryChart, diskChart, trafficChart;
+// 使用命名空间避免全局变量冲突
+window.VirtualizorMonitor = window.VirtualizorMonitor || {};
+(function(VM) {
+    VM.currentInfoContainerId = '';
+    VM.cpuChart = null;
+    VM.memoryChart = null;
+    VM.diskChart = null;
+    VM.trafficChart = null;
 
 // 初始化 Chart.js 图表
-function initCharts() {
+VM.initCharts = function() {
     const chartConfig = {
         type: 'line',
         options: {
@@ -287,7 +293,7 @@ function initCharts() {
     const maxDataPoints = 20;
     const labels = Array(maxDataPoints).fill('');
 
-    cpuChart = new Chart(document.getElementById('cpuChart'), {
+    VM.cpuChart = new Chart(document.getElementById('cpuChart'), {
         ...chartConfig,
         data: {
             labels: labels,
@@ -295,7 +301,7 @@ function initCharts() {
         }
     });
 
-    memoryChart = new Chart(document.getElementById('memoryChart'), {
+    VM.memoryChart = new Chart(document.getElementById('memoryChart'), {
         ...chartConfig,
         data: {
             labels: labels,
@@ -303,7 +309,7 @@ function initCharts() {
         }
     });
 
-    diskChart = new Chart(document.getElementById('diskChart'), {
+    VM.diskChart = new Chart(document.getElementById('diskChart'), {
         ...chartConfig,
         data: {
             labels: labels,
@@ -311,31 +317,31 @@ function initCharts() {
         }
     });
 
-    trafficChart = new Chart(document.getElementById('trafficChart'), {
+    VM.trafficChart = new Chart(document.getElementById('trafficChart'), {
         ...chartConfig,
         data: {
             labels: labels,
             datasets: [{ data: Array(maxDataPoints).fill(0), borderColor: '#ffc107', backgroundColor: 'rgba(255, 193, 7, 0.1)', fill: true }]
         }
     });
-}
+};
 
-function updateChart(chart, value) {
+VM.updateChart = function(chart, value) {
     if (!chart) return;
     const data = chart.data.datasets[0].data;
     data.shift();
     data.push(value);
     chart.update('none');
-}
+};
 
-function refreshInfoPage() {
-    updateLastUpdateTime();
-    loadContainerInfo();
-}
+VM.refreshInfoPage = function() {
+    VM.updateLastUpdateTime();
+    VM.loadContainerInfo();
+};
 
-window.refreshInfoPage = refreshInfoPage;
+window.refreshInfoPage = VM.refreshInfoPage;
 
-function updateLastUpdateTime() {
+VM.updateLastUpdateTime = function() {
     const now = new Date();
     const timeString = now.toLocaleTimeString('zh-CN', {
         hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit'
@@ -344,65 +350,72 @@ function updateLastUpdateTime() {
     if (lastUpdateElement) {
         lastUpdateElement.textContent = timeString;
     }
-}
+};
 
-function loadContainerInfo() {
-    if (!currentInfoContainerId) {
+VM.loadContainerInfo = function() {
+    if (!VM.currentInfoContainerId) {
         const urlParams = new URLSearchParams(window.location.search);
         const containerId = urlParams.get('id');
 
         if (!containerId) {
-            showError('无法获取容器ID');
+            VM.showError('无法获取容器ID');
             return;
         }
-        currentInfoContainerId = containerId;
+        VM.currentInfoContainerId = containerId;
     }
 
-    $('#last-update').html('<i class="fas fa-spinner fa-spin"></i> 更新中...');
-    loadAllInfoData(currentInfoContainerId);
-}
+    if (typeof jQuery !== 'undefined') {
+        jQuery('#last-update').html('<i class="fas fa-spinner fa-spin"></i> 更新中...');
+    }
+    VM.loadAllInfoData(VM.currentInfoContainerId);
+};
 
-function loadAllInfoData(containerId) {
+VM.loadAllInfoData = function(containerId) {
     const timestamp = new Date().getTime();
     const infoUrl = `/provision/custom/content?id=${containerId}&key=info&action=getinfoall&_t=${timestamp}`;
 
-    $.ajax({
-        url: infoUrl,
-        method: 'GET',
-        dataType: 'json',
-        timeout: 10000,
-        cache: false,
-        success: function(response) {
-            if (response && response.code === 200 && response.data) {
-                updateAllInfo(response.data);
-            } else {
-                showError(response.msg || '获取容器信息失败');
+    if (typeof jQuery !== 'undefined') {
+        jQuery.ajax({
+            url: infoUrl,
+            method: 'GET',
+            dataType: 'json',
+            timeout: 10000,
+            cache: false,
+            success: function(response) {
+                if (response && response.code === 200 && response.data) {
+                    VM.updateAllInfo(response.data);
+                } else {
+                    VM.showError(response.msg || '获取容器信息失败');
+                }
+            },
+            error: function(xhr, status, error) {
+                VM.showError('网络请求失败: ' + error);
             }
-        },
-        error: function(xhr, status, error) {
-            showError('网络请求失败: ' + error);
-        }
-    });
-}
+        });
+    }
+};
 
-function updateAllInfo(data) {
+VM.updateAllInfo = function(data) {
+    if (typeof jQuery === 'undefined') return;
+    const $ = jQuery;
+    
     // CPU - 显示格式: xx% / x核
     const cpuUsage = parseFloat(data.cpu_usage || data.used_cpu || data.cpu_percent || 0);
     const cpuCores = data.cpu_cores || data.cpus || data.cores || 1;
     $('#cpu-info').text(cpuUsage.toFixed(2) + '% / ' + cpuCores + '核');
-    updateChart(cpuChart, cpuUsage);
+    VM.updateChart(VM.cpuChart, cpuUsage);
 
     // 内存 - MB
     const memoryUsed = parseFloat(data.memory_used || data.used_ram || data.memory_usage_raw / (1024*1024) || 0);
     const memoryTotal = parseFloat(data.memory || data.ram || 1024);
     $('#memory-info').text(memoryUsed.toFixed(0) + ' MB / ' + memoryTotal.toFixed(0) + ' MB');
-    updateChart(memoryChart, memoryUsed);
+    VM.updateChart(VM.memoryChart, memoryUsed);
 
     // 硬盘 - GB
     const diskUsed = parseFloat(data.disk_used || data.used_disk || data.disk_usage_raw / (1024*1024*1024) || 0);
     const diskTotal = parseFloat(data.disk || 10);
     $('#disk-info').text(diskUsed.toFixed(2) + ' GB / ' + diskTotal.toFixed(0) + ' GB');
-    updateChart(diskChart, diskUsed);
+    VM.updateChart(VM.diskChart, diskUsed);
 
     // 流量 - GB
     const trafficUsed = parseFloat(data.bandwidth_used || data.used_bandwidth || data.traffic_usage_raw / (1024*1024*1024) || 0);
@@ -412,12 +425,15 @@ function updateAllInfo(data) {
     } else {
         $('#traffic-info').text(trafficUsed.toFixed(2) + ' GB / 不限');
     }
-    updateChart(trafficChart, trafficUsed);
+    VM.updateChart(VM.trafficChart, trafficUsed);
 
-    updateLastUpdateTime();
-}
+    VM.updateLastUpdateTime();
+};
 
-function showError(message) {
+VM.showError = function(message) {
+    if (typeof jQuery === 'undefined') return;
+    const $ = jQuery;
+    
     $('#cpu-info').text('加载失败');
     $('#memory-info').text('加载失败');
     $('#disk-info').text('加载失败');
@@ -428,42 +444,59 @@ function showError(message) {
         hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit'
     });
     $('#last-update').text(`${timeString} (错误)`);
-}
+};
 
-$(document).ready(function() {
-    // 等待 Chart.js 加载完成
-    const waitForChart = setInterval(function() {
-        if (window.chartJsLoaded || typeof Chart !== 'undefined') {
-            clearInterval(waitForChart);
-            
-            // 初始化图表
-            initCharts();
-            
-            const urlParams = new URLSearchParams(window.location.search);
-            const containerId = urlParams.get('id');
+})(window.VirtualizorMonitor);
 
-            if (!containerId) {
-                showError('无法获取容器ID');
-                return;
-            }
-
-            currentInfoContainerId = containerId;
-
-            updateLastUpdateTime();
-            loadContainerInfo();
-
-            setInterval(function() {
-                loadContainerInfo();
-            }, 10000); // 每10秒刷新一次
-        }
-    }, 50);
+// 初始化
+(function() {
+    var VM = window.VirtualizorMonitor;
+    // 使用 IIFE 避免全局变量污染
+    if (typeof jQuery === 'undefined') {
+        console.error('jQuery 未加载');
+        return;
+    }
     
-    // 5秒超时保护
-    setTimeout(function() {
-        clearInterval(waitForChart);
-        if (!cpuChart) {
-            console.error('Chart.js 加载超时');
-        }
-    }, 5000);
-});
+    jQuery(document).ready(function($) {
+        // 等待 Chart.js 加载完成
+        const waitForChart = setInterval(function() {
+            if (window.chartJsLoaded || typeof Chart !== 'undefined') {
+                clearInterval(waitForChart);
+                
+                // 初始化图表
+                try {
+                    VM.initCharts();
+                } catch (e) {
+                    console.error('图表初始化失败:', e);
+                    return;
+                }
+                
+                const urlParams = new URLSearchParams(window.location.search);
+                const containerId = urlParams.get('id');
+
+                if (!containerId) {
+                    VM.showError('无法获取容器ID');
+                    return;
+                }
+
+                VM.currentInfoContainerId = containerId;
+
+                VM.updateLastUpdateTime();
+                VM.loadContainerInfo();
+
+                setInterval(function() {
+                    VM.loadContainerInfo();
+                }, 10000); // 每10秒刷新一次
+            }
+        }, 50);
+        
+        // 5秒超时保护
+        setTimeout(function() {
+            clearInterval(waitForChart);
+            if (!VM.cpuChart) {
+                console.error('Chart.js 加载超时，可能被网络防火墙拦截');
+            }
+        }, 5000);
+    });
+})();
 </script>
