@@ -106,12 +106,12 @@ unzip -q "$TMP/$NAME.zip" -d "$TMP" || err "解压失败"
 chmod +x "$TMP/$BIN"
 mv "$TMP/$BIN" "$DIR/"
 echo "$VERSION" > "$DIR/version"
-rm -rf "$TMP"
 
 if [[ -f "$CFG.bak" ]]; then
   read -p "检测到旧配置，是否使用? (Y/n): " USE_OLD
   if [[ $USE_OLD != "n" && $USE_OLD != "N" ]]; then
     mv "$CFG.bak" "$CFG"
+    rm -rf "$TMP"
     ok "已恢复旧配置"
     
     cat > "$SERVICE" <<EOF
@@ -137,9 +137,13 @@ EOF
   fi
 fi
 
-CONFIG_URL="$REPO/raw/main/install/config.yaml"
-info "下载配置模板..."
-wget -qO "$CFG" "$CONFIG_URL" || err "配置模板下载失败"
+if [[ -f "$TMP/config.yaml" ]]; then
+  cp "$TMP/config.yaml" "$CFG"
+  rm -rf "$TMP"
+else
+  rm -rf "$TMP"
+  err "压缩包中未找到配置模板 config.yaml"
+fi
 
 read -p "API 服务端口 [8080]: " SERVER_PORT
 SERVER_PORT=${SERVER_PORT:-8080}
@@ -159,10 +163,22 @@ while [[ -z "$VZ_API_PASSWORD" ]]; do
   [[ -z "$VZ_API_PASSWORD" ]] && warn "不能为空"
 done
 
+while [[ -z "$NAT_PUBLIC_IP" ]]; do
+  read -p "NAT 公网 IP: " NAT_PUBLIC_IP
+  [[ -z "$NAT_PUBLIC_IP" ]] && warn "不能为空"
+done
+
+while [[ -z "$NAT_INTERFACE" ]]; do
+  read -p "NAT 网卡接口: " NAT_INTERFACE
+  [[ -z "$NAT_INTERFACE" ]] && warn "不能为空"
+done
+
 sed -i "s/SERVER_PORT/$SERVER_PORT/" "$CFG"
 sed -i "s/API_KEY/$API_KEY/" "$CFG"
 sed -i "s/VZ_API_KEY/$VZ_API_KEY/" "$CFG"
 sed -i "s/VZ_API_PASSWORD/$VZ_API_PASSWORD/" "$CFG"
+sed -i "s/NAT_PUBLIC_IP/$NAT_PUBLIC_IP/" "$CFG"
+sed -i "s/NAT_INTERFACE/$NAT_INTERFACE/" "$CFG"
 
 ok "配置文件已生成"
 
