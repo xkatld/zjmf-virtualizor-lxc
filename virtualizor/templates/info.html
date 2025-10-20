@@ -279,8 +279,15 @@ VM.initCharts = function() {
                 x: { display: false },
                 y: {
                     beginAtZero: true,
+                    max: 100,
                     grid: { color: '#f0f0f0' },
-                    ticks: { color: '#999', font: { size: 9 } }
+                    ticks: { 
+                        color: '#999', 
+                        font: { size: 9 },
+                        callback: function(value) {
+                            return value + '%';
+                        }
+                    }
                 }
             },
             elements: {
@@ -405,27 +412,30 @@ VM.updateAllInfo = function(data) {
     $('#cpu-info').text(cpuUsage.toFixed(2) + '% / ' + cpuCores + '核');
     VM.updateChart(VM.cpuChart, cpuUsage);
 
-    // 内存 - MB
+    // 内存 - MB，图表显示百分比
     const memoryUsed = parseFloat(data.memory_used || data.used_ram || data.memory_usage_raw / (1024*1024) || 0);
     const memoryTotal = parseFloat(data.memory || data.ram || 1024);
+    const memoryPercent = memoryTotal > 0 ? (memoryUsed / memoryTotal) * 100 : 0;
     $('#memory-info').text(memoryUsed.toFixed(0) + ' MB / ' + memoryTotal.toFixed(0) + ' MB');
-    VM.updateChart(VM.memoryChart, memoryUsed);
+    VM.updateChart(VM.memoryChart, memoryPercent);
 
-    // 硬盘 - GB
+    // 硬盘 - GB，图表显示百分比
     const diskUsed = parseFloat(data.disk_used || data.used_disk || data.disk_usage_raw / (1024*1024*1024) || 0);
     const diskTotal = parseFloat(data.disk || 10);
+    const diskPercent = diskTotal > 0 ? (diskUsed / diskTotal) * 100 : 0;
     $('#disk-info').text(diskUsed.toFixed(2) + ' GB / ' + diskTotal.toFixed(0) + ' GB');
-    VM.updateChart(VM.diskChart, diskUsed);
+    VM.updateChart(VM.diskChart, diskPercent);
 
-    // 流量 - GB
+    // 流量 - GB，图表显示百分比
     const trafficUsed = parseFloat(data.bandwidth_used || data.used_bandwidth || data.traffic_usage_raw / (1024*1024*1024) || 0);
     const trafficTotal = parseFloat(data.bandwidth || 0);
+    const trafficPercent = trafficTotal > 0 ? (trafficUsed / trafficTotal) * 100 : 0;
     if (trafficTotal > 0) {
         $('#traffic-info').text(trafficUsed.toFixed(2) + ' GB / ' + trafficTotal.toFixed(0) + ' GB');
     } else {
         $('#traffic-info').text(trafficUsed.toFixed(2) + ' GB / 不限');
     }
-    VM.updateChart(VM.trafficChart, trafficUsed);
+    VM.updateChart(VM.trafficChart, trafficPercent);
 
     VM.updateLastUpdateTime();
 };
