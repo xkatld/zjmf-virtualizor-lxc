@@ -1,4 +1,4 @@
-# 魔方财务-LXD 对接插件 (zjmf-virtualizor-lxc)
+# 魔方财务Virtualizor-Lxc对接插件 (zjmf-virtualizor-lxc)
 
 这是一个为 [魔方财务](https://www.zjmf.com/) (ZJMF) 系统开发的 virtualizor-lxc 对接插件，为主机商提供完整的 lxc 容器销售与管理解决方案。
 
