@@ -30,3 +30,14 @@ logging:
 nat:
   public_ip: "NAT_PUBLIC_IP"
   interface: "NAT_INTERFACE"
+
+ipv6:
+  enabled: IPV6_ENABLED
+  interface: "IPV6_INTERFACE"
+  pool:
+    start: "IPV6_START"
+    prefix_length: IPV6_PREFIX
+    pool_size: IPV6_POOL_SIZE
+
+proxy:
+  enabled: PROXY_ENABLED
