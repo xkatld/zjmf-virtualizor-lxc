@@ -29,145 +29,117 @@ function virtualizor_ConfigOptions()
     return [
         'cores' => [
             'type'        => 'text',
-            'name'        => 'CPU核心数',
-            'description' => 'CPU核心数量',
+            'name'        => 'CPU',
+            'description' => '核心数量',
             'default'     => '1',
             'key'         => 'cores',
         ],
         'cpu' => [
             'type'        => 'text',
             'name'        => 'CPU权重',
-            'description' => 'CPU权重',
-            'default'     => '1024',
+            'description' => '默认1024',
+            'default'     => '100',
             'key'         => 'cpu',
         ],
         'ram' => [
             'type'        => 'text',
-            'name'        => '内存(MB)',
-            'description' => '内存大小，单位MB',
+            'name'        => '内存',
+            'description' => '单位MB',
             'default'     => '512',
             'key'         => 'ram',
         ],
         'swap' => [
             'type'        => 'text',
-            'name'        => 'SWAP(MB)',
-            'description' => 'SWAP大小，单位MB，0表示等于内存',
-            'default'     => '0',
+            'name'        => 'SWAP',
+            'description' => '单位MB，0表示等于内存',
+            'default'     => '128',
             'key'         => 'swap',
         ],
         'space' => [
             'type'        => 'text',
-            'name'        => '硬盘(GB)',
-            'description' => '硬盘大小，单位GB',
-            'default'     => '10',
+            'name'        => '硬盘',
+            'description' => '单位GB',
+            'default'     => '1',
             'key'         => 'space',
         ],
         'osid' => [
             'type'        => 'text',
             'name'        => 'OS模板ID',
-            'description' => 'Virtualizor OS模板ID',
-            'default'     => '301',
+            'description' => 'Virtualizor系统模板ID',
+            'default'     => '100001',
             'key'         => 'osid',
         ],
         'bandwidth' => [
             'type'        => 'text',
-            'name'        => '月流量(GB)',
-            'description' => '月流量限制，0表示不限制',
-            'default'     => '0',
+            'name'        => '月流量',
+            'description' => '单位GB，0表示不限制',
+            'default'     => '100',
             'key'         => 'bandwidth',
         ],
         'network_speed' => [
             'type'        => 'text',
-            'name'        => '网络速度(KB/s)',
-            'description' => '网络速度，单位KB/s，0表示不限制',
+            'name'        => '下载速度',
+            'description' => '单位KB/s，0表示不限制',
             'default'     => '0',
             'key'         => 'network_speed',
         ],
         'upload_speed' => [
             'type'        => 'text',
-            'name'        => '上传速度(KB/s)',
-            'description' => '上传速度限制，单位KB/s，0表示不限制',
+            'name'        => '上传速度',
+            'description' => '单位KB/s，0表示不限制',
             'default'     => '0',
             'key'         => 'upload_speed',
         ],
-        'num_ips' => [
-            'type'        => 'text',
-            'name'        => 'IPv4数量',
-            'description' => 'IPv4地址数量',
-            'default'     => '1',
-            'key'         => 'num_ips',
-        ],
-        'num_ips6' => [
-            'type'        => 'text',
-            'name'        => 'IPv6数量',
-            'description' => 'IPv6地址数量',
-            'default'     => '0',
-            'key'         => 'num_ips6',
-        ],
-        'num_ips6_subnet' => [
-            'type'        => 'text',
-            'name'        => 'IPv6子网数量',
-            'description' => 'IPv6子网数量',
-            'default'     => '0',
-            'key'         => 'num_ips6_subnet',
-        ],
-        'osreinstall_limit' => [
-            'type'        => 'text',
-            'name'        => '重装系统限制',
-            'description' => '每月重装系统次数限制，0表示不限制',
-            'default'     => '0',
-            'key'         => 'osreinstall_limit',
-        ],
         'nat_enabled' => [
             'type'        => 'dropdown',
-            'name'        => 'NAT端口转发功能',
-            'description' => '是否启用NAT端口转发功能',
-            'default'     => 'false',
+            'name'        => 'NAT端口转发',
+            'description' => '启用后可添加端口映射',
+            'default'     => 'true',
             'key'         => 'nat_enabled',
             'options'     => ['false' => '禁用', 'true' => '启用'],
         ],
         'nat_limit' => [
             'type'        => 'text',
             'name'        => 'NAT规则数量',
-            'description' => 'NAT端口转发规则的数量限制',
+            'description' => '端口转发规则上限',
             'default'     => '5',
             'key'         => 'nat_limit',
         ],
         'udp_enabled' => [
             'type'        => 'dropdown',
-            'name'        => 'UDP协议支持',
-            'description' => '是否允许创建UDP端口转发规则',
+            'name'        => 'UDP协议',
+            'description' => '允许UDP端口转发',
             'default'     => 'false',
             'key'         => 'udp_enabled',
             'options'     => ['false' => '禁用', 'true' => '启用'],
         ],
         'ipv6_enabled' => [
             'type'        => 'dropdown',
-            'name'        => '独立IPv6功能',
-            'description' => '独立IPv6绑定开关',
+            'name'        => '独立IPv6',
+            'description' => '额外分配公网IPv6',
             'default'     => 'false',
             'key'         => 'ipv6_enabled',
             'options'     => ['false' => '禁用', 'true' => '启用'],
         ],
         'ipv6_limit' => [
             'type'        => 'text',
-            'name'        => 'IPv6绑定数量',
-            'description' => 'IPv6地址数量上限',
+            'name'        => 'IPv6数量',
+            'description' => 'IPv6地址上限',
             'default'     => '1',
             'key'         => 'ipv6_limit',
         ],
         'proxy_enabled' => [
             'type'        => 'dropdown',
-            'name'        => 'Nginx反向代理功能',
-            'description' => '反向代理开关',
+            'name'        => 'Nginx反向代理',
+            'description' => '启用后可绑定域名',
             'default'     => 'false',
             'key'         => 'proxy_enabled',
             'options'     => ['false' => '禁用', 'true' => '启用'],
         ],
         'proxy_limit' => [
             'type'        => 'text',
-            'name'        => '反向代理域名数量',
-            'description' => '域名绑定数量上限',
+            'name'        => '域名数量',
+            'description' => '域名绑定上限',
             'default'     => '1',
             'key'         => 'proxy_limit',
         ],
@@ -267,18 +239,11 @@ function virtualizor_CreateAccount($params)
     if (!empty($params['configoptions']['upload_speed'])) {
         $createData['upload_speed'] = (int)$params['configoptions']['upload_speed'];
     }
-    if (!empty($params['configoptions']['num_ips'])) {
-        $createData['num_ips'] = (int)$params['configoptions']['num_ips'];
-    }
-    if (!empty($params['configoptions']['num_ips6'])) {
-        $createData['num_ips6'] = (int)$params['configoptions']['num_ips6'];
-    }
-    if (!empty($params['configoptions']['num_ips6_subnet'])) {
-        $createData['num_ips6_subnet'] = (int)$params['configoptions']['num_ips6_subnet'];
-    }
-    if (!empty($params['configoptions']['osreinstall_limit'])) {
-        $createData['osreinstall_limit'] = (int)$params['configoptions']['osreinstall_limit'];
-    }
+    
+    $createData['num_ips'] = 1;
+    $createData['num_ips6'] = 1;
+    $createData['num_ips6_subnet'] = 0;
+    $createData['osreinstall_limit'] = 0;
 
     $data = [
         'url'  => '/api/create',

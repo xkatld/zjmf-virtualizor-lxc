@@ -394,10 +394,29 @@ if [[ $PROXY_ENABLE == "y" || $PROXY_ENABLE == "Y" ]]; then
   
   info "检查 Nginx 是否已安装..."
   if ! command -v nginx &> /dev/null; then
-    warn "未检测到 Nginx，请确保已安装 Nginx"
-    info "安装命令: yum install -y nginx 或 dnf install -y nginx"
-  else
+    info "自动安装 Nginx..."
+    case $pkg_manager in
+      dnf)
+        dnf install -y nginx || warn "Nginx 安装失败，请手动安装"
+        ;;
+      yum)
+        yum install -y nginx || warn "Nginx 安装失败，请手动安装"
+        ;;
+    esac
+  fi
+  
+  if command -v nginx &> /dev/null; then
     ok "Nginx 已安装"
+    
+    info "启动并启用 Nginx..."
+    systemctl enable --now nginx 2>/dev/null || true
+    
+    if [[ ! -d /etc/nginx/conf.d ]]; then
+      mkdir -p /etc/nginx/conf.d
+      ok "创建 Nginx 配置目录"
+    fi
+  else
+    warn "Nginx 未安装，反向代理功能可能无法正常工作"
   fi
   
   ok "Nginx 反向代理功能已启用"
