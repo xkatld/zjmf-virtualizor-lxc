@@ -439,25 +439,24 @@ SERVER_IP=$(curl -s 4.ipw.cn 2>/dev/null || hostname -I | awk '{print $1}' || ec
 
 echo
 echo "========================================"
-echo "          安装完成"
+ok "安装完成"
 echo "========================================"
 echo
-echo "面板/API地址: https://$SERVER_IP:4085"
-echo
+echo "面板地址: https://$SERVER_IP:4085"
+if [[ -n "$VG_NAME" ]] && vgs "$VG_NAME" &>/dev/null; then
+  VG_SIZE=$(vgs --noheadings -o vg_size "$VG_NAME" 2>/dev/null | xargs | tr '[:lower:]' '[:upper:]')
+  echo "存储卷组: $VG_NAME ($VG_SIZE)"
+fi
 if [[ -n "$IPV4_SUBNET" ]]; then
-  echo "内网段: $IPV4_SUBNET"
+  echo "内网段v4: $IPV4_SUBNET"
   if [[ -n "$IPV6_SUBNET" ]]; then
-    echo "        $IPV6_SUBNET"
+    echo "内网段v6: $IPV6_SUBNET"
   fi
 fi
 echo
-if [[ -n "$VG_NAME" ]] && vgs "$VG_NAME" &>/dev/null; then
-  VG_SIZE=$(vgs --noheadings -o vg_size "$VG_NAME" 2>/dev/null | xargs)
-  echo "存储: $VG_NAME ($VG_SIZE)"
-fi
-echo
-warn "重要: 请登录面板重新生成 API 凭证 (Configuration -> Server Info -> Reset API keys)"
-echo
-ok "安装完成！"
+warn "重要: 请务必登录 Web 面板重新生成 API 凭证:"
+echo "  1. 访问管理面板并登录"
+echo "  2. 进入 Configuration -> Server Info"
+echo "  3. 点击 Reset API keys 按钮"
 echo
 

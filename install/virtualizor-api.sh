@@ -274,13 +274,15 @@ EOF
     echo
     
     info "等待服务启动..."
-    sleep 2
+    sleep 3
     
-    if systemctl is-active --quiet $NAME 2>/dev/null; then
-      ok "服务运行正常"
-    else
-      warn "服务状态异常，请检查日志"
-    fi
+    echo
+    echo "========================================"
+    echo "服务状态"
+    echo "========================================"
+    echo
+    systemctl status $NAME --no-pager --lines=10
+    
     echo
     exit 0
   fi
@@ -300,12 +302,14 @@ echo "========================================"
 echo
 echo "    Virtualizor API 服务配置向导 - $VERSION"
 echo
+echo "提示: 共 7 个配置步骤，包括基础配置、Virtualizor、NAT、IPv6、反向代理等"
+echo
 
 DEFAULT_IP=$(curl -s 4.ipw.cn 2>/dev/null || hostname -I | awk '{print $1}' || echo "")
 DEFAULT_INTERFACE=$(ip route | grep default | head -1 | awk '{print $5}' || echo "eth0")
 DEFAULT_API_KEY=$(openssl rand -hex 16 | tr 'a-f' 'A-F')
 
-echo "==== 步骤 1/5: 基础配置 ===="
+echo "==== 步骤 1/7: 基础配置 ===="
 echo
 
 read -p "API 服务端口 [8080]: " SERVER_PORT
@@ -317,7 +321,7 @@ API_KEY=${API_KEY:-$DEFAULT_API_KEY}
 ok "基础配置完成"
 echo
 
-echo "==== 步骤 2/5: Virtualizor 配置 ===="
+echo "==== 步骤 2/7: Virtualizor 配置 ===="
 echo
 
 while [[ -z "$VZ_API_KEY" ]]; do
@@ -333,7 +337,7 @@ done
 ok "Virtualizor 配置完成"
 echo
 
-echo "==== 步骤 3/5: NAT 网络配置 ===="
+echo "==== 步骤 3/7: NAT 网络配置 ===="
 echo
 
 read -p "NAT 公网 IP [$DEFAULT_IP]: " NAT_PUBLIC_IP
@@ -350,6 +354,59 @@ NAT_INTERFACE=${NAT_INTERFACE:-$DEFAULT_INTERFACE}
 ok "NAT 网络配置完成"
 echo
 
+echo "==== 步骤 4/7: IPv6 独立绑定配置 ===="
+echo
+echo "提示: IPv6 独立绑定允许为容器分配独立的公网 IPv6 地址"
+echo
+
+read -p "是否启用 IPv6 独立绑定功能? (y/N): " IPV6_ENABLE
+if [[ $IPV6_ENABLE == "y" || $IPV6_ENABLE == "Y" ]]; then
+  IPV6_ENABLED="true"
+  
+  read -p "IPv6 网卡接口 [$DEFAULT_INTERFACE]: " IPV6_INTERFACE
+  IPV6_INTERFACE=${IPV6_INTERFACE:-$DEFAULT_INTERFACE}
+  
+  read -p "IPv6 地址池起始地址 [2001:db8::1000]: " IPV6_START
+  IPV6_START=${IPV6_START:-"2001:db8::1000"}
+  
+  IPV6_PREFIX="64"
+  IPV6_POOL_SIZE="1000"
+  
+  ok "IPv6 独立绑定功能已启用"
+else
+  IPV6_ENABLED="false"
+  IPV6_INTERFACE="eth0"
+  IPV6_START="2001:db8::1000"
+  IPV6_PREFIX="64"
+  IPV6_POOL_SIZE="1000"
+  info "IPv6 独立绑定功能已禁用"
+fi
+echo
+
+echo "==== 步骤 5/7: Nginx 反向代理配置 ===="
+echo
+echo "提示: Nginx 反向代理允许为容器绑定域名，支持 SSL/TLS"
+echo
+
+read -p "是否启用 Nginx 反向代理功能? (y/N): " PROXY_ENABLE
+if [[ $PROXY_ENABLE == "y" || $PROXY_ENABLE == "Y" ]]; then
+  PROXY_ENABLED="true"
+  
+  info "检查 Nginx 是否已安装..."
+  if ! command -v nginx &> /dev/null; then
+    warn "未检测到 Nginx，请确保已安装 Nginx"
+    info "安装命令: yum install -y nginx 或 dnf install -y nginx"
+  else
+    ok "Nginx 已安装"
+  fi
+  
+  ok "Nginx 反向代理功能已启用"
+else
+  PROXY_ENABLED="false"
+  info "Nginx 反向代理功能已禁用"
+fi
+echo
+
 info "正在生成配置文件..."
 
 sed -i "s|SERVER_PORT|$SERVER_PORT|g" "$CFG"
@@ -358,6 +415,14 @@ sed -i "s|\"VZ_API_KEY\"|\"$(escape_sed "$VZ_API_KEY")\"|g" "$CFG"
 sed -i "s|\"VZ_API_PASSWORD\"|\"$(escape_sed "$VZ_API_PASSWORD")\"|g" "$CFG"
 sed -i "s|\"NAT_PUBLIC_IP\"|\"$(escape_sed "$NAT_PUBLIC_IP")\"|g" "$CFG"
 sed -i "s|\"NAT_INTERFACE\"|\"$(escape_sed "$NAT_INTERFACE")\"|g" "$CFG"
+
+sed -i "s|IPV6_ENABLED|$IPV6_ENABLED|g" "$CFG"
+sed -i "s|\"IPV6_INTERFACE\"|\"$(escape_sed "$IPV6_INTERFACE")\"|g" "$CFG"
+sed -i "s|\"IPV6_START\"|\"$(escape_sed "$IPV6_START")\"|g" "$CFG"
+sed -i "s|IPV6_PREFIX|$IPV6_PREFIX|g" "$CFG"
+sed -i "s|IPV6_POOL_SIZE|$IPV6_POOL_SIZE|g" "$CFG"
+
+sed -i "s|PROXY_ENABLED|$PROXY_ENABLED|g" "$CFG"
 
 ok "配置文件已生成"
 
@@ -406,10 +471,14 @@ echo
 info "等待服务启动..."
 sleep 3
 
+echo
+info "服务状态:"
+systemctl status $NAME --no-pager --lines=10
+
+echo
 if systemctl is-active --quiet $NAME 2>/dev/null; then
   ok "服务运行正常"
 else
   warn "服务状态异常，请检查日志"
 fi
 echo
-

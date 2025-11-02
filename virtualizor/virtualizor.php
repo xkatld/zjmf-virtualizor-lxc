@@ -19,7 +19,7 @@ function virtualizor_MetaData()
 {
     return [
         'DisplayName' => '魔方财务-Virtualizor-Lxc对接插件 by xkatld',
-        'APIVersion'  => '1.0.0',
+        'APIVersion'  => '1.0.1',
         'HelpDoc'     => 'https://github.com/your-repo/virtualizor-api',
     ];
 }
@@ -140,6 +140,36 @@ function virtualizor_ConfigOptions()
             'default'     => 'false',
             'key'         => 'udp_enabled',
             'options'     => ['false' => '禁用', 'true' => '启用'],
+        ],
+        'ipv6_enabled' => [
+            'type'        => 'dropdown',
+            'name'        => '独立IPv6功能',
+            'description' => '独立IPv6绑定开关',
+            'default'     => 'false',
+            'key'         => 'ipv6_enabled',
+            'options'     => ['false' => '禁用', 'true' => '启用'],
+        ],
+        'ipv6_limit' => [
+            'type'        => 'text',
+            'name'        => 'IPv6绑定数量',
+            'description' => 'IPv6地址数量上限',
+            'default'     => '1',
+            'key'         => 'ipv6_limit',
+        ],
+        'proxy_enabled' => [
+            'type'        => 'dropdown',
+            'name'        => 'Nginx反向代理功能',
+            'description' => '反向代理开关',
+            'default'     => 'false',
+            'key'         => 'proxy_enabled',
+            'options'     => ['false' => '禁用', 'true' => '启用'],
+        ],
+        'proxy_limit' => [
+            'type'        => 'text',
+            'name'        => '反向代理域名数量',
+            'description' => '域名绑定数量上限',
+            'default'     => '1',
+            'key'         => 'proxy_limit',
         ],
     ];
 }
@@ -516,6 +546,16 @@ function virtualizor_ClientArea($params)
         $pages['nat_acl'] = ['name' => 'NAT转发'];
     }
     
+    $ipv6_enabled = ($params['configoptions']['ipv6_enabled'] ?? 'false') === 'true';
+    if ($ipv6_enabled) {
+        $pages['ipv6_acl'] = ['name' => 'IPv6绑定'];
+    }
+    
+    $proxy_enabled = ($params['configoptions']['proxy_enabled'] ?? 'false') === 'true';
+    if ($proxy_enabled) {
+        $pages['proxy_acl'] = ['name' => '反向代理'];
+    }
+    
     return $pages;
 }
 
@@ -539,12 +579,20 @@ function virtualizor_ClientAreaOutput($params, $key)
             echo json_encode(virtualizor_natcheck($params));
             exit;
         }
+        
+        if ($action === 'proxycheck') {
+            header('Content-Type: application/json');
+            echo json_encode(virtualizor_proxycheck($params));
+            exit;
+        }
 
         $apiEndpoints = [
             'getinfo'    => '/api/status',
             'getstats'   => '/api/info',
             'getinfoall' => '/api/info',
             'natlist'    => '/api/natlist',
+            'ipv6list'   => '/api/ipv6/list',
+            'proxylist'  => '/api/proxy/list',
         ];
 
         $apiEndpoint = $apiEndpoints[$action] ?? '';
@@ -618,13 +666,67 @@ function virtualizor_ClientAreaOutput($params, $key)
             ],
         ];
     }
+    
+    if ($key == 'ipv6_acl') {
+        $ipv6_enabled = ($params['configoptions']['ipv6_enabled'] ?? 'false') === 'true';
+        
+        $requestData = [
+            'url'  => '/api/ipv6/list?hostname=' . $params['domain'] . '&_t=' . time(),
+            'type' => 'application/x-www-form-urlencoded',
+            'data' => [],
+        ];
+        $res = virtualizor_Curl($params, $requestData, 'GET');
+
+        $ipv6_limit = intval($params['configoptions']['ipv6_limit'] ?? 1);
+        $current_count = virtualizor_getIPv6BindingCount($params);
+
+        return [
+            'template' => 'templates/ipv6.html',
+            'vars'     => [
+                'list' => $res['data'] ?? [],
+                'msg'  => $res['msg'] ?? '',
+                'ipv6_limit' => $ipv6_limit,
+                'current_count' => $current_count,
+                'remaining_count' => max(0, $ipv6_limit - $current_count),
+                'container_name' => $params['domain'],
+                'ipv6_enabled' => $ipv6_enabled,
+            ],
+        ];
+    }
+    
+    if ($key == 'proxy_acl') {
+        $proxy_enabled = ($params['configoptions']['proxy_enabled'] ?? 'false') === 'true';
+        
+        $requestData = [
+            'url'  => '/api/proxy/list?hostname=' . $params['domain'] . '&_t=' . time(),
+            'type' => 'application/x-www-form-urlencoded',
+            'data' => [],
+        ];
+        $res = virtualizor_Curl($params, $requestData, 'GET');
+
+        $proxy_limit = intval($params['configoptions']['proxy_limit'] ?? 1);
+        $current_count = is_array($res['data']) ? count($res['data']) : 0;
+        
+        return [
+            'template' => 'templates/proxy.html',
+            'vars'     => [
+                'list' => $res['data'] ?? [],
+                'msg'  => $res['msg'] ?? '',
+                'proxy_limit' => $proxy_limit,
+                'current_count' => $current_count,
+                'remaining_count' => max(0, $proxy_limit - $current_count),
+                'container_name' => $params['domain'],
+                'proxy_enabled' => $proxy_enabled,
+            ],
+        ];
+    }
 }
 
 // 允许客户端调用的函数列表
 function virtualizor_AllowFunction()
 {
     return [
-        'client' => ['vnc', 'natadd', 'natdel', 'natlist', 'natcheck'],
+        'client' => ['vnc', 'natadd', 'natdel', 'natlist', 'natcheck', 'ipv6add', 'ipv6del', 'ipv6list', 'proxyadd', 'proxydel', 'proxylist', 'proxycheck'],
     ];
 }
 
@@ -1090,5 +1192,245 @@ function virtualizor_natcheck($params)
     }
 
     return $res;
+}
+
+// ========== IPv6 独立绑定功能 ==========
+
+// 添加IPv6绑定
+function virtualizor_ipv6add($params)
+{
+    $ipv6_enabled = ($params['configoptions']['ipv6_enabled'] ?? 'false') === 'true';
+    if (!$ipv6_enabled) {
+        return ['status' => 'error', 'msg' => 'IPv6独立绑定功能未启用，请联系管理员启用此功能。'];
+    }
+    
+    parse_str(file_get_contents("php://input"), $post);
+
+    $description = trim($post['description'] ?? '');
+
+    $ipv6_limit = intval($params['configoptions']['ipv6_limit'] ?? 1);
+    $current_count = virtualizor_getIPv6BindingCount($params);
+    
+    if ($current_count >= $ipv6_limit) {
+        return ['status' => 'error', 'msg' => "IPv6绑定数量已达到限制（{$ipv6_limit}个），无法添加更多绑定"];
+    }
+
+    $requestData = 'hostname=' . urlencode($params['domain']) . '&description=' . urlencode($description);
+
+    $data = [
+        'url'  => '/api/ipv6/add',
+        'type' => 'application/x-www-form-urlencoded',
+        'data' => $requestData,
+    ];
+
+    $res = virtualizor_Curl($params, $data, 'POST');
+
+    if (isset($res['code']) && $res['code'] == 200) {
+        return ['status' => 'success', 'msg' => $res['msg'] ?? 'IPv6绑定添加成功'];
+    } else {
+        return ['status' => 'error', 'msg' => $res['msg'] ?? 'IPv6绑定添加失败'];
+    }
+}
+
+// 删除IPv6绑定
+function virtualizor_ipv6del($params)
+{
+    $ipv6_enabled = ($params['configoptions']['ipv6_enabled'] ?? 'false') === 'true';
+    if (!$ipv6_enabled) {
+        return ['status' => 'error', 'msg' => 'IPv6独立绑定功能已禁用'];
+    }
+    
+    parse_str(file_get_contents("php://input"), $post);
+
+    $public_ipv6 = trim($post['public_ipv6'] ?? '');
+
+    if (empty($public_ipv6)) {
+        return ['status' => 'error', 'msg' => '请提供要删除的IPv6地址'];
+    }
+
+    $requestData = 'hostname=' . urlencode($params['domain']) . '&public_ipv6=' . urlencode($public_ipv6);
+
+    $data = [
+        'url'  => '/api/ipv6/delete',
+        'type' => 'application/x-www-form-urlencoded',
+        'data' => $requestData,
+    ];
+
+    $res = virtualizor_Curl($params, $data, 'POST');
+
+    if (isset($res['code']) && $res['code'] == 200) {
+        return ['status' => 'success', 'msg' => $res['msg'] ?? 'IPv6绑定删除成功'];
+    } else {
+        return ['status' => 'error', 'msg' => $res['msg'] ?? 'IPv6绑定删除失败'];
+    }
+}
+
+// 获取IPv6绑定列表
+function virtualizor_ipv6list($params)
+{
+    $requestData = [
+        'url'  => '/api/ipv6/list?hostname=' . $params['domain'] . '&_t=' . time(),
+        'type' => 'application/x-www-form-urlencoded',
+        'data' => [],
+    ];
+    $res = virtualizor_Curl($params, $requestData, 'GET');
+    if ($res === null) {
+        return ['code' => 500, 'msg' => '连接API服务器失败', 'data' => []];
+    }
+    return $res;
+}
+
+// 获取IPv6绑定数量
+function virtualizor_getIPv6BindingCount($params)
+{
+    $res = virtualizor_ipv6list($params);
+    return is_array($res['data'] ?? null) ? count($res['data']) : 0;
+}
+
+// ========== Nginx 反向代理功能 ==========
+
+// 添加反向代理
+function virtualizor_proxyadd($params)
+{
+    $proxy_enabled = ($params['configoptions']['proxy_enabled'] ?? 'false') === 'true';
+    if (!$proxy_enabled) {
+        return ['status' => 'error', 'msg' => 'Nginx反向代理功能已禁用，请联系管理员启用此功能。'];
+    }
+    
+    parse_str(file_get_contents("php://input"), $post);
+
+    $domain = trim($post['domain'] ?? '');
+    $container_port = intval($post['container_port'] ?? 80);
+    $description = trim($post['description'] ?? '');
+    $ssl_enabled = ($post['ssl_enabled'] ?? 'false') === 'true';
+    $ssl_type = trim($post['ssl_type'] ?? 'self-signed');
+    $ssl_cert = trim($post['ssl_cert'] ?? '');
+    $ssl_key = trim($post['ssl_key'] ?? '');
+
+    if (empty($domain)) {
+        return ['status' => 'error', 'msg' => '请提供域名'];
+    }
+
+    if ($container_port <= 0 || $container_port > 65535) {
+        return ['status' => 'error', 'msg' => '容器端口范围为1-65535'];
+    }
+
+    $proxy_limit = intval($params['configoptions']['proxy_limit'] ?? 1);
+    $current_count = virtualizor_getProxyCount($params);
+    
+    if ($current_count >= $proxy_limit) {
+        return ['status' => 'error', 'msg' => "已达到反向代理数量上限（{$proxy_limit}个），无法继续添加"];
+    }
+
+    if ($ssl_enabled && $ssl_type === 'custom' && (empty($ssl_cert) || empty($ssl_key))) {
+        return ['status' => 'error', 'msg' => '启用自定义SSL证书时，必须提供证书和私钥内容'];
+    }
+
+    $requestData = 'hostname=' . urlencode($params['domain']) 
+        . '&domain=' . urlencode($domain)
+        . '&container_port=' . $container_port
+        . '&description=' . urlencode($description)
+        . '&ssl_enabled=' . ($ssl_enabled ? 'true' : 'false')
+        . '&ssl_type=' . urlencode($ssl_type);
+
+    if ($ssl_enabled && $ssl_type === 'custom') {
+        $requestData .= '&ssl_cert=' . urlencode($ssl_cert) . '&ssl_key=' . urlencode($ssl_key);
+    }
+
+    $data = [
+        'url'  => '/api/proxy/add',
+        'type' => 'application/x-www-form-urlencoded',
+        'data' => $requestData,
+    ];
+
+    $res = virtualizor_Curl($params, $data, 'POST');
+
+    if (isset($res['code']) && $res['code'] == 200) {
+        return ['status' => 'success', 'msg' => $res['msg'] ?? '反向代理添加成功'];
+    } else {
+        return ['status' => 'error', 'msg' => $res['msg'] ?? '反向代理添加失败'];
+    }
+}
+
+// 删除反向代理
+function virtualizor_proxydel($params)
+{
+    $proxy_enabled = ($params['configoptions']['proxy_enabled'] ?? 'false') === 'true';
+    if (!$proxy_enabled) {
+        return ['status' => 'error', 'msg' => 'Nginx反向代理功能已禁用'];
+    }
+    
+    parse_str(file_get_contents("php://input"), $post);
+
+    $domain = trim($post['domain'] ?? '');
+
+    if (empty($domain)) {
+        return ['status' => 'error', 'msg' => '请提供要删除的域名'];
+    }
+
+    $requestData = 'hostname=' . urlencode($params['domain']) . '&domain=' . urlencode($domain);
+
+    $data = [
+        'url'  => '/api/proxy/delete',
+        'type' => 'application/x-www-form-urlencoded',
+        'data' => $requestData,
+    ];
+
+    $res = virtualizor_Curl($params, $data, 'POST');
+
+    if (isset($res['code']) && $res['code'] == 200) {
+        return ['status' => 'success', 'msg' => $res['msg'] ?? '反向代理删除成功'];
+    } else {
+        return ['status' => 'error', 'msg' => $res['msg'] ?? '反向代理删除失败'];
+    }
+}
+
+// 获取反向代理列表
+function virtualizor_proxylist($params)
+{
+    $requestData = [
+        'url'  => '/api/proxy/list?hostname=' . $params['domain'] . '&_t=' . time(),
+        'type' => 'application/x-www-form-urlencoded',
+        'data' => [],
+    ];
+    $res = virtualizor_Curl($params, $requestData, 'GET');
+    if ($res === null) {
+        return ['code' => 500, 'msg' => '连接API服务器失败', 'data' => []];
+    }
+    return $res;
+}
+
+// 检查域名是否可用
+function virtualizor_proxycheck($params)
+{
+    $domain = trim($_GET['domain'] ?? '');
+
+    if (empty($domain)) {
+        return ['code' => 400, 'msg' => '请提供域名', 'data' => ['available' => false, 'reason' => '域名不能为空']];
+    }
+
+    $requestData = [
+        'url'  => '/api/proxy/check?domain=' . urlencode($domain) . '&_t=' . time(),
+        'type' => 'application/x-www-form-urlencoded',
+        'data' => [],
+    ];
+    $res = virtualizor_Curl($params, $requestData, 'GET');
+
+    if ($res === null) {
+        return ['code' => 500, 'msg' => '连接API服务器失败', 'data' => ['available' => false, 'reason' => '连接服务器失败']];
+    }
+
+    if (!isset($res['code'])) {
+        return ['code' => 500, 'msg' => '服务器返回无效数据', 'data' => ['available' => false, 'reason' => '服务器返回无效数据']];
+    }
+
+    return $res;
+}
+
+// 获取反向代理数量
+function virtualizor_getProxyCount($params)
+{
+    $res = virtualizor_proxylist($params);
+    return is_array($res['data'] ?? null) ? count($res['data']) : 0;
 }
 
