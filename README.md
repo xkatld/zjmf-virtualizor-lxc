@@ -4,6 +4,10 @@
 
 **详细的安装和使用文档，请参考 [项目 Wiki](https://github.com/xkatld/zjmf-virtualizor-lxc/wiki)。**
 
+
+交流群：
+<img width="150" height="265" alt="image" src="https://github.com/user-attachments/assets/a9e6e62c-7cb7-4a27-903a-89a1406e9da4" />
+
 ## 项目特色
 
 - 高性能Go后端服务 - 完整的容器管理功能 - NAT端口转发（IPv4）- 独立IPv6 - 反向代理功能 - Web VNC控制台 - 安全的API认证 - 与魔方财务系统无缝集成
