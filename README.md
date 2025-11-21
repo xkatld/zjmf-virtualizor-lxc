@@ -1,3 +1,12 @@
+# 新版本2.0项目发布
+新项目地址 [lxdapi-web-server](https://github.com/xkatld/lxdapi-web-server)
+- 支持各大主流财务 独立web面板 全网络配置支持 等全新设计和功能
+- 1.0版本将会 减少维护 处理不即时 等问题 建议使用2.0版本
+## 联系
+
+需要加群讨论的可以先加微信`fsynetcom`记得备注。
+
+---
 # 魔方财务Virtualizor-Lxc对接插件 (zjmf-virtualizor-lxc)
 
 这是一个为 [魔方财务](https://www.zjmf.com/) (ZJMF) 系统开发的 virtualizor-lxc 对接插件，为主机商提供完整的 lxc 容器销售与管理解决方案。
